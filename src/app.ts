@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import userRoutes from "./routes/user.route";
 import { errorHandler } from "./middlewares/error.middleware";
+import authRoutes from "./routes/auth.routes";
 
 dotenv.config();
 connectDB();
@@ -18,6 +19,8 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({ status: true });
 });
+
+app.use("/api/auth", authRoutes);
 
 app.use("/api/users", userRoutes);
 
