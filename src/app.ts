@@ -5,6 +5,7 @@ import connectDB from "./config/db";
 import userRoutes from "./routes/user.route";
 import { errorHandler } from "./middlewares/error.middleware";
 import authRoutes from "./routes/auth.routes";
+import contentRoutes from "./routes/content.routes";
 
 dotenv.config();
 connectDB();
@@ -23,6 +24,8 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", userRoutes);
+
+app.use("/api/content", contentRoutes);
 
 // Error Handler (must be last)
 app.use(errorHandler);

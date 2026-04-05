@@ -4,6 +4,7 @@ export interface IContent extends Document {
   owner_id: Types.ObjectId;
   collaborators: Types.ObjectId[];
   title: string;
+  title_image: string;
   tiptap_json: string;
   access_type: "public" | "link-only" | "private";
   createdAt: Date;
@@ -14,8 +15,9 @@ const contentSchema = new Schema<IContent>(
   {
     owner_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
     collaborators: [{ type: Schema.Types.ObjectId, ref: "User" }],
-    title: { type: String, required: true, trim: true },
-    tiptap_json: { type: String, required: true },
+    title: { type: String, default: "Untitled", trim: true },
+    title_image: { type: String, default: "" },
+    tiptap_json: { type: String, default: "{}" },
     access_type: {
       type: String,
       enum: ["public", "link-only", "private"],
