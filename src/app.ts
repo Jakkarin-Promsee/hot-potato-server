@@ -6,6 +6,7 @@ import userRoutes from "./routes/user.route";
 import { errorHandler } from "./middlewares/error.middleware";
 import authRoutes from "./routes/auth.routes";
 import contentRoutes from "./routes/content.routes";
+import answerRoutes from "./routes/answer.routes";
 
 dotenv.config();
 connectDB();
@@ -26,6 +27,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
 app.use("/api/content", contentRoutes);
+
+app.use("/api/content-answer", answerRoutes);
 
 // Error Handler (must be last)
 app.use(errorHandler);
