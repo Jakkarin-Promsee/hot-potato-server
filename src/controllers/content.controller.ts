@@ -43,10 +43,14 @@ export const createBlankContent = async (
 };
 
 // PUT /api/content/:id
+// if {clientUpdatedAt:""} -> return confilct if db have lastest
+// if not -> force saving it
 export const updateContent = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  const { clientUpdatedAt, ...updateData } = req.body;
+
   const content = await Content.findById(req.params.id);
 
   if (!content) {
@@ -54,7 +58,20 @@ export const updateContent = async (
     return;
   }
 
-  // Check if user is owner or collaborator
+  // ── Version check ──────────────────────────────────────────────
+  if (clientUpdatedAt) {
+    const serverTime = new Date(content.updatedAt).getTime();
+    const clientTime = new Date(clientUpdatedAt).getTime();
+
+    if (clientTime < serverTime) {
+      res.status(409).json({
+        message: "Conflict: a newer version exists on the server.",
+        serverUpdatedAt: content.updatedAt,
+      });
+      return;
+    }
+  }
+
   const isOwner = content.owner_id.toString() === req.user!._id.toString();
   const isCollaborator = content.collaborators
     .map((c) => c.toString())
@@ -67,8 +84,8 @@ export const updateContent = async (
 
   const updated = await Content.findByIdAndUpdate(
     req.params.id,
-    { ...req.body, updated_at: new Date() },
-    { returnDocument: "after" }, // return updated doc
+    { ...updateData },
+    { returnDocument: "after" },
   );
 
   res.json(updated);
