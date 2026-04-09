@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import userRoutes from "./routes/user.route";
 import { errorHandler } from "./middlewares/error.middleware";
+import statusRoutes from "./routes/status.routes";
 import authRoutes from "./routes/auth.routes";
 import contentRoutes from "./routes/content.routes";
 import answerRoutes from "./routes/answer.routes";
@@ -17,10 +18,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Status
 app.get("/", (req, res) => {
-  res.json({ status: true });
+  res.json({
+    res: "Hot Potato said Hello World (//O-O//)\n You can use this api via .../api/xxx",
+  });
 });
+
+app.use("/api/status", statusRoutes);
 
 app.use("/api/auth", authRoutes);
 
