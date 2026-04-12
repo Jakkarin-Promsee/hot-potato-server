@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.routes";
 import contentRoutes from "./routes/content.routes";
 import answerRoutes from "./routes/answer.routes";
 import imageRoutes from "./routes/image.routes";
+import categoryRoutes from "./routes/category.routes";
 
 dotenv.config();
 connectDB().catch((err) => {
@@ -34,6 +35,8 @@ app.use("/api/status", statusRoutes);
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", userRoutes);
+
+app.use("/api/categories", categoryRoutes);
 
 app.use("/api/images", imageRoutes);
 

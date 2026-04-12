@@ -5,6 +5,7 @@ import {
   saveImage,
   deleteImage,
   clearImages,
+  assignCategory,
 } from "../controllers/image.controller";
 
 const router = Router();
@@ -16,5 +17,6 @@ router.get("/", getImages);
 router.post("/", saveImage);
 router.delete("/:public_id", deleteImage); // e.g. DELETE /images/folder%2Fmy-photo
 router.delete("/", clearImages);
+router.patch("/:public_id/category", assignCategory);
 
 export default router;

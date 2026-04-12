@@ -1,11 +1,30 @@
 import mongoose, { Document, Schema } from "mongoose";
 
+export interface IImage extends Document {
+  user_id: mongoose.Types.ObjectId;
+  category_id: mongoose.Types.ObjectId | null; // ← just the value type
+  public_id: string;
+  secure_url: string;
+  original_filename: string;
+  format: string;
+  bytes: number;
+  width: number;
+  height: number;
+  created_at: Date;
+}
+
 const imageSchema = new Schema<IImage>(
   {
     user_id: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
+    },
+    category_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
       index: true,
     },
     public_id: { type: String, required: true, unique: true },
@@ -18,17 +37,5 @@ const imageSchema = new Schema<IImage>(
   },
   { timestamps: { createdAt: "created_at", updatedAt: false } },
 );
-
-export interface IImage extends Document {
-  user_id: mongoose.Types.ObjectId;
-  public_id: string;
-  secure_url: string;
-  original_filename: string;
-  format: string;
-  bytes: number;
-  width: number;
-  height: number;
-  created_at: Date;
-}
 
 export const Image = mongoose.model<IImage>("Image", imageSchema);

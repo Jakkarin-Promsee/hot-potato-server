@@ -24,8 +24,16 @@ export const saveImage = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { public_id, url, secure_url, width, height, format, bytes } =
-      req.body;
+    const {
+      public_id,
+      secure_url,
+      original_filename,
+      format,
+      bytes,
+      width,
+      height,
+      category_id,
+    } = req.body;
 
     if (!public_id || !secure_url) {
       res
@@ -45,10 +53,12 @@ export const saveImage = async (
       user_id: req.user!._id,
       public_id,
       secure_url,
-      width,
-      height,
+      original_filename,
       format,
       bytes,
+      width,
+      height,
+      category_id: category_id ?? null,
     });
 
     res.status(201).json(image);
@@ -92,5 +102,28 @@ export const clearImages = async (
     res.json({ message: "All images cleared" });
   } catch {
     res.status(500).json({ message: "Failed to clear images" });
+  }
+};
+
+export const assignCategory = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const public_id = decodeURIComponent(req.params.public_id as string);
+    const { category_id } = req.body; // null = remove from category
+
+    const image = await Image.findOneAndUpdate(
+      { public_id, user_id: req.user!._id },
+      { $set: { category_id: category_id ?? null } },
+      { new: true },
+    );
+    if (!image) {
+      res.status(404).json({ message: "Image not found" });
+      return;
+    }
+    res.json(image);
+  } catch {
+    res.status(500).json({ message: "Failed to assign category" });
   }
 };
