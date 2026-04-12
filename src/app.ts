@@ -2,15 +2,19 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
-import userRoutes from "./routes/user.route";
+import userRoutes from "./routes/user.routes";
 import { errorHandler } from "./middlewares/error.middleware";
 import statusRoutes from "./routes/status.routes";
 import authRoutes from "./routes/auth.routes";
 import contentRoutes from "./routes/content.routes";
 import answerRoutes from "./routes/answer.routes";
+import imageRoutes from "./routes/image.routes";
 
 dotenv.config();
-connectDB();
+connectDB().catch((err) => {
+  console.error("DB connection failed:", err);
+  process.exit(1);
+});
 
 const app = express();
 
@@ -30,6 +34,8 @@ app.use("/api/status", statusRoutes);
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", userRoutes);
+
+app.use("/api/images", imageRoutes);
 
 app.use("/api/content", contentRoutes);
 

@@ -5,11 +5,12 @@ import {
   getEnvStatus,
   getServerStatus,
 } from "../controllers/status.controller";
+import { protect } from "../middlewares/auth.middleware";
 
 const router = Router();
 
 // GET /api/status/          → server uptime, memory, platform info
-router.get("/", getServerStatus);
+router.get("/", protect, getServerStatus);
 
 // GET /api/status/database  → MongoDB connection state
 router.get("/database", getDatabaseStatus);
