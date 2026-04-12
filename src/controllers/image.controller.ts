@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { Image } from "../models/image.model";
 import { AuthRequest } from "../types";
+import axios from "axios";
 
 // GET /images — all images for the logged-in user (latest first)
 export const getImages = async (
@@ -64,6 +65,63 @@ export const saveImage = async (
     res.status(201).json(image);
   } catch {
     res.status(500).json({ message: "Failed to save image" });
+  }
+};
+
+// POST /images/url — save an image from a remote URL
+export const saveImageFromUrl = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { url, category_id } = req.body;
+
+    if (!url?.trim()) {
+      res.status(400).json({ message: "url is required" });
+      return;
+    }
+
+    // 1. Fetch the remote image to validate it's actually an image
+    const head = await axios.head(url).catch(() => null);
+    const contentType = head?.headers?.["content-type"] ?? "";
+    if (!contentType.startsWith("image/")) {
+      res.status(422).json({ message: "URL does not point to a valid image" });
+      return;
+    }
+
+    // 2. Upload to Cloudinary via URL (no file transfer needed)
+    const formData = new URLSearchParams();
+    formData.append("file", url);
+    formData.append("upload_preset", process.env.CLOUDINARY_UPLOAD_PRESET!);
+
+    const { data: cloudinary } = await axios.post(
+      `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+      formData,
+    );
+
+    // 3. Check duplicate
+    const existing = await Image.findOne({ public_id: cloudinary.public_id });
+    if (existing) {
+      res.status(409).json({ message: "Image already saved" });
+      return;
+    }
+
+    // 4. Persist
+    const image = await Image.create({
+      user_id: req.user!._id,
+      public_id: cloudinary.public_id,
+      secure_url: cloudinary.secure_url,
+      original_filename: cloudinary.original_filename,
+      format: cloudinary.format,
+      bytes: cloudinary.bytes,
+      width: cloudinary.width,
+      height: cloudinary.height,
+      category_id: category_id ?? null,
+    });
+
+    res.status(201).json(image);
+  } catch {
+    res.status(500).json({ message: "Failed to save image from URL" });
   }
 };
 
