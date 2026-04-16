@@ -35,6 +35,29 @@ export const protect = async (
   next();
 };
 
+/** Sets `req.user` when a valid Bearer token is present; otherwise continues without user. */
+export const optionalAuth = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+      id: string;
+    };
+    const user = await User.findById(decoded.id).select("-password");
+    if (user) req.user = user;
+  } catch {
+    // Invalid/expired token — treat as anonymous for public endpoints
+  }
+  next();
+};
+
 // Role guard — use after protect
 export const restrictTo = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {

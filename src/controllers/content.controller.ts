@@ -4,7 +4,7 @@ import { Content } from "../models/content.model";
 import { buildAuthorSnapshot } from "../services/contentAuthorSnapshot.service";
 import { AuthRequest } from "../types";
 
-// GET /api/content/load?id=xx
+// GET /api/content/load?id=xx (optional auth: anonymous may load public / link-only)
 export const loadContent = async (
   req: AuthRequest,
   res: Response,
@@ -16,14 +16,24 @@ export const loadContent = async (
     return;
   }
 
-  // Check access permission
-  const isOwner = content.owner_id.toString() === req.user!._id.toString();
-  const isCollaborator = content.collaborators
-    .map((c) => c.toString())
-    .includes(req.user!._id.toString());
+  const uid = req.user?._id?.toString();
+  const isOwner = uid ? content.owner_id.toString() === uid : false;
+  const isCollaborator = uid
+    ? content.collaborators.map((c) => c.toString()).includes(uid)
+    : false;
   const isPublic = content.access_type === "public";
+  const isLinkOnly = content.access_type === "link-only";
 
-  if (!isPublic && !isOwner && !isCollaborator) {
+  if (!uid) {
+    if (!isPublic && !isLinkOnly) {
+      res.status(401).json({ message: "Login required to view this content" });
+      return;
+    }
+    res.json(content);
+    return;
+  }
+
+  if (!isPublic && !isLinkOnly && !isOwner && !isCollaborator) {
     res.status(403).json({ message: "No permission to view this content" });
     return;
   }
@@ -54,8 +64,12 @@ export const updateContent = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  const { clientUpdatedAt, author_name: _dropAuthor, collaborator_names: _dropCollabNames, ...rest } =
-    req.body;
+  const {
+    clientUpdatedAt,
+    author_name: _dropAuthor,
+    collaborator_names: _dropCollabNames,
+    ...rest
+  } = req.body;
   const updateData: Record<string, unknown> = { ...rest };
 
   const content = await Content.findById(req.params.id);
@@ -100,11 +114,9 @@ export const updateContent = async (
     updateData["collaborator_names"] = snap.collaborator_names;
   }
 
-  const updated = await Content.findByIdAndUpdate(
-    req.params.id,
-    updateData,
-    { returnDocument: "after" },
-  );
+  const updated = await Content.findByIdAndUpdate(req.params.id, updateData, {
+    returnDocument: "after",
+  });
 
   res.json(updated);
 };
@@ -138,6 +150,11 @@ export const searchContent = async (
   res: Response,
 ): Promise<void> => {
   const { q, mine, explore } = req.query;
+
+  if (mine === "true" && !req.user) {
+    res.status(401).json({ message: "Login required" });
+    return;
+  }
 
   const filter: Record<string, any> = {};
 
