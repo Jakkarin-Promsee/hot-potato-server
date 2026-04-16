@@ -10,6 +10,7 @@ import contentRoutes from "./routes/content.routes";
 import answerRoutes from "./routes/answer.routes";
 import imageRoutes from "./routes/image.routes";
 import categoryRoutes from "./routes/category.routes";
+import historyRoutes from "./routes/history.routes";
 
 dotenv.config();
 connectDB().catch((err) => {
@@ -41,6 +42,8 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/images", imageRoutes);
 
 app.use("/api/content", contentRoutes);
+
+app.use("/api/history", historyRoutes);
 
 app.use("/api/content-answer", answerRoutes);
 

@@ -1,5 +1,7 @@
 import { Response } from "express";
+import { Types } from "mongoose";
 import { UserContent } from "../models/user_content.model";
+import { touchLearningHistory } from "../services/learningHistory.service";
 import { AuthRequest } from "../types";
 
 // GET /api/answer/:contentId
@@ -42,6 +44,11 @@ export const saveAnswer = async (
     { upsert: true, returnDocument: "after" },
   );
 
+  await touchLearningHistory(
+    req.user!._id,
+    new Types.ObjectId(String(req.params.contentId)),
+  );
+
   res.json({ success: true });
 };
 
@@ -56,6 +63,11 @@ export const bulkSaveAnswers = async (
     { user_id: req.user!._id, content_id: req.params.contentId },
     { $set: { answers, last_visited: new Date() } },
     { upsert: true, returnDocument: "after" },
+  );
+
+  await touchLearningHistory(
+    req.user!._id,
+    new Types.ObjectId(String(req.params.contentId)),
   );
 
   res.json({ success: true });

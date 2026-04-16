@@ -1,5 +1,7 @@
 import { Response } from "express";
+import { Types } from "mongoose";
 import { Content } from "../models/content.model";
+import { buildAuthorSnapshot } from "../services/contentAuthorSnapshot.service";
 import { AuthRequest } from "../types";
 
 // GET /api/content/load?id=xx
@@ -34,9 +36,12 @@ export const createBlankContent = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  const snap = await buildAuthorSnapshot(req.user!._id, []);
+
   const content = await Content.create({
     owner_id: req.user!._id,
-    // everything else uses schema defaults
+    author_name: snap.author_name,
+    collaborator_names: snap.collaborator_names,
   });
 
   res.status(201).json({ content_id: content._id });
@@ -49,7 +54,9 @@ export const updateContent = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  const { clientUpdatedAt, ...updateData } = req.body;
+  const { clientUpdatedAt, author_name: _dropAuthor, collaborator_names: _dropCollabNames, ...rest } =
+    req.body;
+  const updateData: Record<string, unknown> = { ...rest };
 
   const content = await Content.findById(req.params.id);
 
@@ -82,9 +89,20 @@ export const updateContent = async (
     return;
   }
 
+  // Recompute denormalized author fields when collaborators[] changes
+  if (Object.prototype.hasOwnProperty.call(updateData, "collaborators")) {
+    const raw = updateData["collaborators"];
+    const collabIds = Array.isArray(raw)
+      ? raw.map((id: unknown) => new Types.ObjectId(String(id)))
+      : [];
+    const snap = await buildAuthorSnapshot(content.owner_id, collabIds);
+    updateData["author_name"] = snap.author_name;
+    updateData["collaborator_names"] = snap.collaborator_names;
+  }
+
   const updated = await Content.findByIdAndUpdate(
     req.params.id,
-    { ...updateData },
+    updateData,
     { returnDocument: "after" },
   );
 
@@ -114,39 +132,78 @@ export const deleteContent = async (
   res.json({ message: "Content deleted" });
 };
 
-// GET /api/content/search?q=title&mine=true
+// GET /api/content/search?q=title&mine=true | explore=true
 export const searchContent = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  const { q, mine } = req.query;
+  const { q, mine, explore } = req.query;
 
   const filter: Record<string, any> = {};
 
-  // Filter by user (owner or collaborator)
   if (mine === "true") {
     filter["$or"] = [
       { owner_id: req.user!._id },
       { collaborators: req.user!._id },
     ];
+  } else if (explore === "true") {
+    filter["access_type"] = "public";
   }
 
   // Filter by title text
   if (q) {
     const titleFilter = { title: { $regex: q, $options: "i" } }; // case insensitive
 
-    // Combine with mine filter if both provided
+    // Combine with mine / explore filter if both provided
     if (filter["$or"]) {
       filter["$and"] = [{ $or: filter["$or"] }, titleFilter];
       delete filter["$or"];
+    } else if (filter["access_type"] !== undefined) {
+      filter["$and"] = [{ access_type: filter["access_type"] }, titleFilter];
+      delete filter["access_type"];
     } else {
       filter["title"] = titleFilter.title;
     }
   }
 
-  const contents = await Content.find(filter).select(
-    "_id title title_image updatedAt",
-  );
+  const contents = await Content.find(filter)
+    .select(
+      "_id title title_image updatedAt topics description access_type author_name collaborator_names owner_id",
+    )
+    .populate({ path: "owner_id", select: "name" })
+    .sort({ updatedAt: -1 })
+    .lean();
 
-  res.json(contents);
+  const payload = contents.map((doc) => {
+    const ownerDoc = doc.owner_id as
+      | { name?: string }
+      | Types.ObjectId
+      | null
+      | undefined;
+    const ownerName =
+      ownerDoc &&
+      typeof ownerDoc === "object" &&
+      "name" in ownerDoc &&
+      ownerDoc.name
+        ? String(ownerDoc.name).trim()
+        : "";
+    const stored =
+      typeof doc.author_name === "string" ? doc.author_name.trim() : "";
+
+    return {
+      _id: doc._id,
+      title: doc.title,
+      title_image: doc.title_image,
+      updatedAt: doc.updatedAt,
+      topics: doc.topics,
+      description: doc.description,
+      access_type: doc.access_type,
+      author_name: stored || ownerName,
+      collaborator_names: Array.isArray(doc.collaborator_names)
+        ? doc.collaborator_names
+        : [],
+    };
+  });
+
+  res.json(payload);
 };
