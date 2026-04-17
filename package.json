@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/Jakkarin-Promsee/hot-potato-server#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.15.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

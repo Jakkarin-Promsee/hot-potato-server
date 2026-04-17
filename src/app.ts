@@ -19,10 +19,28 @@ connectDB().catch((err) => {
 });
 
 const app = express();
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+app.get("/api/chat", async (req, res) => {
+  // const { prompt } = req.body;
+  const prompt = "Hello, how are you?";
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    res.json({ response: text });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Gemini request failed" });
+  }
+});
 
 // Status
 app.get("/", (req, res) => {
