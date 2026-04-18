@@ -290,6 +290,7 @@ export const askFeedback = async (
       diagnostics,
       feedbackMode,
     );
+    console.log(prompt);
     const result = await model.generateContent(prompt);
     const feedback = result.response.text().trim();
     res.status(200).json({ feedback });
@@ -342,6 +343,7 @@ export const askWriteEvaluation = async (
       studentAnswer,
       feedbackMode,
     );
+    console.log(prompt);
     const result = await model.generateContent(prompt);
     const feedback = result.response.text().trim();
     res.status(200).json({ feedback });
