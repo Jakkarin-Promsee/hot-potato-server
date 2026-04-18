@@ -14,15 +14,19 @@ interface AskFeedbackBody {
   evaluationLevel?: unknown;
   accuracyPercent?: unknown;
   diagnostics?: unknown;
+  feedbackMode?: unknown;
 }
 
 interface AskWriteEvaluationBody {
   question?: unknown;
   guideAnswer?: unknown;
   studentAnswer?: unknown;
+  feedbackMode?: unknown;
 }
 
-const MODEL_NAME = "gemma-3-4b-it";
+type FeedbackMode = "quick_check" | "full_reflection";
+
+const MODEL_NAME = "gemini-2.5-flash-lite";
 const WRITE_EVAL_MODEL_NAME = (
   process.env.AI_WRITE_EVAL_MODEL ??
   process.env.AI_HEAVY_MODEL ??
@@ -85,7 +89,21 @@ function buildFeedbackPrompt(
   evaluationLevel: "correct" | "almost" | "incorrect",
   accuracyPercent: number,
   diagnostics: string,
+  feedbackMode: FeedbackMode,
 ): string {
+  const modeInstruction =
+    feedbackMode === "full_reflection"
+      ? [
+          "Mode: full_reflection.",
+          "Give deeper reflection and coaching in around 5-8 sentences.",
+          "Analyze thinking quality and suggest one concrete improvement plan.",
+        ].join("\n")
+      : [
+          "Mode: quick_check.",
+          "Keep feedback short and simple (1-3 sentences).",
+          "Focus on one key correction and one tiny next step.",
+        ].join("\n");
+
   return [
     "You are a close friend helping another friend study.",
     getLanguageInstruction("feedback"),
@@ -100,6 +118,7 @@ function buildFeedbackPrompt(
     "- Focus more on the student's answer analysis than simply dumping the final answer.",
     "- If you give the correct answer, do it after explaining what the student already got right.",
     "- End with one actionable next step.",
+    modeInstruction,
     "",
     "=== Evaluation (must follow) ===",
     `level: ${evaluationLevel}`,
@@ -121,7 +140,21 @@ function buildWriteEvaluationPrompt(
   question: string,
   guideAnswer: string,
   studentAnswer: string,
+  feedbackMode: FeedbackMode,
 ): string {
+  const modeInstruction =
+    feedbackMode === "full_reflection"
+      ? [
+          "Mode: full_reflection.",
+          "Respond with deeper reflection in medium-to-long detail (6-10 sentences).",
+          "Emphasize self-reflection, reasoning quality, and what to improve next.",
+        ].join("\n")
+      : [
+          "Mode: quick_check.",
+          "Respond shortly (2-4 sentences).",
+          "Highlight one good point and one key fix only.",
+        ].join("\n");
+
   return [
     "You are a close friend helping another friend study.",
     "Goal: deeply evaluate a student's open-ended answer, not just exact-match checking.",
@@ -142,6 +175,7 @@ function buildWriteEvaluationPrompt(
     "- Output style must be natural long-form conversation, like talking to a real friend.",
     "- Write as 2-4 connected paragraphs, not numbered sections, not bullet lists, and not rigid scorecards.",
     "- Keep it flowing: appreciate what they did well, then gently guide missing points, then suggest how to improve next attempt.",
+    modeInstruction,
     "",
     "=== Question ===",
     question || "(No question provided)",
@@ -221,10 +255,23 @@ export const askFeedback = async (
       ? evaluationLevelRaw
       : "incorrect";
   const accuracyPercentRaw =
-    typeof req.body?.accuracyPercent === "number" ? req.body.accuracyPercent : 0;
-  const accuracyPercent = Math.max(0, Math.min(100, Math.round(accuracyPercentRaw)));
+    typeof req.body?.accuracyPercent === "number"
+      ? req.body.accuracyPercent
+      : 0;
+  const accuracyPercent = Math.max(
+    0,
+    Math.min(100, Math.round(accuracyPercentRaw)),
+  );
   const diagnostics =
-    typeof req.body?.diagnostics === "string" ? req.body.diagnostics.trim() : "";
+    typeof req.body?.diagnostics === "string"
+      ? req.body.diagnostics.trim()
+      : "";
+  const feedbackModeRaw =
+    typeof req.body?.feedbackMode === "string"
+      ? req.body.feedbackMode.trim().toLowerCase()
+      : "";
+  const feedbackMode: FeedbackMode =
+    feedbackModeRaw === "full_reflection" ? "full_reflection" : "quick_check";
 
   if (!question) {
     res.status(400).json({ message: "question is required" });
@@ -241,6 +288,7 @@ export const askFeedback = async (
       evaluationLevel,
       accuracyPercent,
       diagnostics,
+      feedbackMode,
     );
     const result = await model.generateContent(prompt);
     const feedback = result.response.text().trim();
@@ -271,6 +319,12 @@ export const askWriteEvaluation = async (
     typeof req.body?.studentAnswer === "string"
       ? req.body.studentAnswer.trim()
       : "";
+  const feedbackModeRaw =
+    typeof req.body?.feedbackMode === "string"
+      ? req.body.feedbackMode.trim().toLowerCase()
+      : "";
+  const feedbackMode: FeedbackMode =
+    feedbackModeRaw === "full_reflection" ? "full_reflection" : "quick_check";
 
   if (!question || !studentAnswer) {
     res
@@ -286,6 +340,7 @@ export const askWriteEvaluation = async (
       question,
       guideAnswer,
       studentAnswer,
+      feedbackMode,
     );
     const result = await model.generateContent(prompt);
     const feedback = result.response.text().trim();
