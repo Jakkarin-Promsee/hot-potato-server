@@ -16,17 +16,37 @@ interface AskFeedbackBody {
   diagnostics?: unknown;
 }
 
+interface AskWriteEvaluationBody {
+  question?: unknown;
+  guideAnswer?: unknown;
+  studentAnswer?: unknown;
+}
+
 const MODEL_NAME = "gemma-3-4b-it";
+const WRITE_EVAL_MODEL_NAME = (
+  process.env.AI_WRITE_EVAL_MODEL ??
+  process.env.AI_HEAVY_MODEL ??
+  MODEL_NAME
+).trim();
 const OUTPUT_LANGUAGE =
   (process.env.AI_OUTPUT_LANGUAGE ?? "thai").trim().toLowerCase() === "english"
     ? "english"
     : "thai";
 
-function getLanguageInstruction(style: "answer" | "feedback"): string {
+function getLanguageInstruction(
+  style: "answer" | "feedback" | "writeEvaluation",
+): string {
   if (OUTPUT_LANGUAGE === "english") {
+    if (style === "writeEvaluation") {
+      return "Write in English with medium-to-long detail (6-10 sentences).";
+    }
     return style === "answer"
       ? "Respond in English."
       : "Write feedback in English with medium-to-long detail (4-7 sentences).";
+  }
+
+  if (style === "writeEvaluation") {
+    return "เขียนเป็นภาษาไทยเป็นหลักแบบละเอียดปานกลางถึงยาว (6-10 ประโยค) โดยคงสูตร/คำศัพท์เฉพาะเป็นภาษาเดิมได้";
   }
 
   return style === "answer"
@@ -94,6 +114,43 @@ function buildFeedbackPrompt(
     "",
     "=== User Answer ===",
     userAnswer || "(No user answer provided)",
+  ].join("\n");
+}
+
+function buildWriteEvaluationPrompt(
+  question: string,
+  guideAnswer: string,
+  studentAnswer: string,
+): string {
+  return [
+    "You are a close friend helping another friend study.",
+    "Goal: deeply evaluate a student's open-ended answer, not just exact-match checking.",
+    getLanguageInstruction("feedback"),
+    "Extend detail level to medium-to-long (6-10 sentences).",
+    "Style: casual, warm, a bit playful, like friend-to-friend chat (not formal teacher tone).",
+    "Important rules:",
+    "- The teacher guide answer is only a reference direction, not the only acceptable answer.",
+    "- Accept alternative valid reasoning if it is logically sound.",
+    "- You can lightly tease/play around a bit, but never insult, shame, or attack the learner.",
+    "- Never label the learner as 'wrong', 'incorrect', or use harsh judgment words.",
+    "- Start with strengths in the student answer before gaps.",
+    "- If there are gaps, frame gently like: 'ส่วนนี้ถูกแล้ว (A) แต่ยังขาดอีกนิดที่ (B)'.",
+    "- Explain exactly what is missing and how to improve, step by step.",
+    "- Focus more on the student's thinking quality than directly dumping the final answer.",
+    "- If you provide a better final answer, give it after feedback and keep it concise.",
+    "- End with one actionable next step.",
+    "- Output style must be natural long-form conversation, like talking to a real friend.",
+    "- Write as 2-4 connected paragraphs, not numbered sections, not bullet lists, and not rigid scorecards.",
+    "- Keep it flowing: appreciate what they did well, then gently guide missing points, then suggest how to improve next attempt.",
+    "",
+    "=== Question ===",
+    question || "(No question provided)",
+    "",
+    "=== Teacher Guide Answer (reference only) ===",
+    guideAnswer || "(No guide answer provided)",
+    "",
+    "=== Student Answer ===",
+    studentAnswer || "(No student answer provided)",
   ].join("\n");
 }
 
@@ -191,5 +248,50 @@ export const askFeedback = async (
   } catch (error) {
     console.error("Gemini feedback request failed:", error);
     res.status(500).json({ message: "Gemini feedback request failed" });
+  }
+};
+
+export const askWriteEvaluation = async (
+  req: Request<{}, {}, AskWriteEvaluationBody>,
+  res: Response,
+): Promise<void> => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ message: "Missing GEMINI_API_KEY in server env" });
+    return;
+  }
+
+  const question =
+    typeof req.body?.question === "string" ? req.body.question.trim() : "";
+  const guideAnswer =
+    typeof req.body?.guideAnswer === "string"
+      ? req.body.guideAnswer.trim()
+      : "";
+  const studentAnswer =
+    typeof req.body?.studentAnswer === "string"
+      ? req.body.studentAnswer.trim()
+      : "";
+
+  if (!question || !studentAnswer) {
+    res
+      .status(400)
+      .json({ message: "question and studentAnswer are required" });
+    return;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: WRITE_EVAL_MODEL_NAME });
+    const prompt = buildWriteEvaluationPrompt(
+      question,
+      guideAnswer,
+      studentAnswer,
+    );
+    const result = await model.generateContent(prompt);
+    const feedback = result.response.text().trim();
+    res.status(200).json({ feedback });
+  } catch (error) {
+    console.error("Gemini write evaluation request failed:", error);
+    res.status(500).json({ message: "Gemini write evaluation request failed" });
   }
 };
