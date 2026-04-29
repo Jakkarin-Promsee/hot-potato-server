@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model";
+import { AuthRequest } from "../types";
 
 const generateToken = (id: string) => {
   return jwt.sign(
@@ -74,4 +75,81 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       role: user.role,
     },
   });
+};
+
+// GET /api/auth/recheck
+export const recheckToken = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({
+      message: "Authentication failed, please login again",
+      code: "TOKEN_INVALID",
+      forceRelogin: true,
+      clearToken: true,
+    });
+    return;
+  }
+
+  // Sliding session: issue a fresh token whenever client rechecks on app entry.
+  const token = generateToken(req.user._id.toString());
+
+  res.status(200).json({
+    message: "Token valid",
+    token,
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+    },
+  });
+};
+
+// PUT /api/auth/change-password
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ message: "Current password and new password are required" });
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    res.status(400).json({ message: "New password must be at least 8 characters" });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res
+      .status(400)
+      .json({ message: "New password must be different from current password" });
+    return;
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  const isMatch = await user.comparePassword(currentPassword);
+  if (!isMatch) {
+    res.status(401).json({ message: "Current password is incorrect" });
+    return;
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  res.status(200).json({ message: "Password changed successfully" });
 };
